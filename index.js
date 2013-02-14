@@ -84,7 +84,7 @@ var ExtendTaskScript = ""
 	+ "if state[1] == 'work' and state[2] == workerId then\n"
 		+ "redis.call('hmset', taskKey, 'mtime', now);\n"
 	+ "else\n"
-		+ "return { err = 'worker doesn\'t own task' }\n"
+		+ "return { err = 'worker doesnt own task' }\n"
 	+ "end"
 
 Steve.prototype.extendTask = function extendTask(task, optionalCallback) {
