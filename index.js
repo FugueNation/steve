@@ -104,10 +104,10 @@ var ReturnTaskScript = ""
 //	+ "redis.log(redis.LOG_WARNING, state[1], state[2]);\n"
 	+ "if state[1] == 'work' and state[2] == workerId then\n"
 		+ "redis.call('hmset', taskKey, 'state', 'wait', 'mtime', now, 'workerId', '');\n"
-		+ "redis.call('lrem', namespace .. '_work_queue', taskId, 0)\n"
+		+ "redis.call('lrem', namespace .. '_work_queue', 0, taskId)\n"
 		+ "redis.call('lpush', namespace .. '_wait_queue', taskId)\n"
 	+ "else\n"
-		+ "return { err = 'worker doesn\'t own task' }\n"
+		+ "return { err = 'worker doesnt own task' }\n"
 	+ "end"
 
 Steve.prototype.returnTask = function returnTask(task, optionalCallback) {
@@ -127,7 +127,7 @@ var EndTaskScript = ""
 //	+ "redis.log(redis.LOG_WARNING, state[1], state[2]);\n"
 	+ "if state[1] == 'work' and state[2] == workerId then\n"
 		+ "redis.call('del', taskKey);\n"
-		+ "redis.call('lrem', namespace .. '_work_queue', taskId, 0)\n"
+		+ "redis.call('lrem', namespace .. '_work_queue', 0, taskId)\n"
 	+ "else\n"
 		+ "return { err = 'worker doesnt own task' }\n"
 	+ "end"
@@ -147,10 +147,10 @@ var ReclaimTaskScript = ""
 	+ "local list        = redis.call('lrange', namespace .. '_work_queue', 0, -1)\n"
 	+ "for idx, taskId in ipairs(list) do\n"
 		+ "local taskKey = namespace .. '_task_' .. taskId\n"
-		+ "local mtime   = tonumber(redis.call('hget', taskKey, 'mtime'))\n"
+		+ "local mtime   = tonumber(redis.call('hget', taskKey, 'mtime')) or 0\n"
 		+ "if mtime + timeout < tonumber(now) then\n"
 			+ "redis.call('hmset', taskKey, 'state', 'wait', 'mtime', now, 'workerId', '');\n"
-			+ "redis.call('lrem', namespace .. '_work_queue', taskId, 0)\n"
+			+ "redis.call('lrem', namespace .. '_work_queue', 0, taskId)\n"
 			+ "redis.call('lpush', namespace .. '_wait_queue', taskId)\n"
 		+ "end\n"
 	+ "end"
@@ -216,10 +216,10 @@ setInterval(function() {
 		if (task) {
 		console.log(task.task.ownerId, steve.workerId, task.task.ownerId == steve.workerId);
 			if (task.task.ownerId == steve.workerId) {
-				//steve.returnTask(task);
+				steve.returnTask(task);
 			} else {
+				steve.endTask(task);
 			}
-			//steve.endTask(task);
 		}
 		steve.reclaimTasks(10000);
 		callback();
