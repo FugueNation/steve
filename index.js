@@ -53,6 +53,7 @@ Steve.prototype.pullTask = function pullTask(callback) {
 	self.kvs.eval(PullTaskScript, 1, self.namespace, self.workerId, Date.now(), function(err, ret) {
 		var task;
 		if (ret) {
+			//parse task
 			task = { id: parseInt(ret[0]), task: {} }
 			var rawTask = ret[1];
 			for( var idx = 0; idx < rawTask.length; idx += 2 ) {
@@ -66,14 +67,14 @@ Steve.prototype.pullTask = function pullTask(callback) {
 			}
 		}
 		try {
-			callback(err, task, function(){});
+			callback(err, task);
 		} catch(err2) {
 			self.emit('error', err2);
 		}
 	});
 }
 
-var ExtendTaskScript = ""
+var TouchTaskScript = ""
 	+ "local namespace   = KEYS[1]\n"
 	+ "local taskId      = tonumber(ARGV[1])\n"
 	+ "local workerId    = ARGV[2]\n"
@@ -87,8 +88,9 @@ var ExtendTaskScript = ""
 		+ "return { err = 'worker doesnt own task' }\n"
 	+ "end"
 
-Steve.prototype.extendTask = function extendTask(task, optionalCallback) {
-	self.kvs.eval(ExtendTaskScript, 1, self.namespace, task.id, self.workerId, Date.now(), function(err) {
+Steve.prototype.touchTask = function extendTask(task, optionalCallback) {
+	var self = this;
+	self.kvs.eval(TouchTaskScript, 1, self.namespace, task.id, self.workerId, Date.now(), function(err) {
 		if (optionalCallback) return optionalCallback(err)
 		if (err) self.emit('error', err);
 	});
@@ -163,66 +165,33 @@ Steve.prototype.reclaimTasks = function reclaimTasks(timeout, optionalCallback) 
 	});
 }
 
-/*
-var PushToErrorScript =""
-	+ "local job = 
-Steve.prototype.errorTask = function errorTask(job, errorStack, optionalCallback) {
-	self.kvs.eval(PushToErrorScript, self.namespace + "_work_queue", self.namespace + "_error_queue", job, errorStack, function(err) { 
-		if (optionalCallback) return optionalCallback(err)
-		if (err) self.emit('error', err);
-	});
-}
-
-Steve.prototype.pollTasks = function poll() {
-	var self = this;
-	self.kvs.rpoplpush(self.namespace + "_wait_queue", self.namespace + "_work_queue", function callback(err, job) {
-		if (err) return self.emit("error", err);
-		if (job) {
-			job = JSON.parse(job);
-			if (self.listeners(job.event).length > 0) {
-				self._isWorking = true;
-				self.emit(job.event, job, function jobCallback(err, handled) {
-					if (err) {
-						return self.errorTask(job, err.stack);
-					}
-				})
-			} else {
-				//this process has not registered to handle this events
-				self.pushTask(job)
-			}
-		}
-	});
-}
 
 Steve.prototype.isWorking = function isWorking() {
 	return this._isWorking;
 }
 
-Steve.prototype.quit = function quit() {
-	
-}
-*/
-
 exports.Steve = Steve;
 
-var redis = require("redis"),
-	        client = redis.createClient();
+var test = true;
+if (test) {
+	var redis = require("redis"),
+				client = redis.createClient();
 
-var steve = new Steve('steve_test', {}, client);
-steve.pushTask({testA:123});
-setInterval(function() {
-	steve.pullTask(function(err, task, callback) {
-		console.log(task);
-		if (task) {
-		console.log(task.task.ownerId, steve.workerId, task.task.ownerId == steve.workerId);
-			if (task.task.ownerId == steve.workerId) {
-				steve.returnTask(task);
-			} else {
-				steve.endTask(task);
+	var steve = new Steve('steve_test', {}, client);
+	steve.pushTask({testA:123});
+	setInterval(function() {
+		steve.pullTask(function(err, task) {
+			console.log(task);
+			if (task) {
+			console.log(task.task.ownerId, steve.workerId, task.task.ownerId == steve.workerId);
+				if (task.task.ownerId == steve.workerId) {
+					steve.touchTask(task);
+				} else {
+					steve.endTask(task);
+				}
 			}
-		}
-		steve.reclaimTasks(10000);
-		callback();
-	})
-}, 5000);
+			steve.reclaimTasks(10000);
+		})
+	}, 5000);
+}
 
